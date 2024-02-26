@@ -1,0 +1,175 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {},
+    "functions": [],
+    "variables": {},
+    "resources": [
+        {
+            "name": "[toLower('Linuxstorage999')]",
+            "type": "Microsoft.Storage/storageAccounts",
+            "apiVersion": "2023-01-01",
+            "location": "[resourceGroup().location]",
+            "tags": {
+                "displayName": "Linux Storage Account"
+            },
+            "sku": {
+                "name": "Standard_LRS"
+            },
+            "kind": "Storage"
+        },
+        {
+            "name": "Linux-PublicIP",
+            "type": "Microsoft.Network/publicIPAddresses",
+            "apiVersion": "2023-04-01",
+            "location": "[resourceGroup().location]",
+            "tags": {
+                "displayName": "PublicIPAddress"
+            },
+            "properties": {
+                "publicIPAllocationMethod": "Static",
+                "dnsSettings": {
+                    "domainNameLabel": "[toLower('Linux-PublicIP')]"
+                }
+            }
+        },
+        {
+            "name": "Linux-nsg",
+            "type": "Microsoft.Network/networkSecurityGroups",
+            "apiVersion": "2023-04-01",
+            "location": "[resourceGroup().location]",
+            "properties": {
+                "securityRules": [
+                    {
+                        "name": "nsgRule1",
+                        "properties": {
+                            "description": "description",
+                            "protocol": "Tcp",
+                            "sourcePortRange": "*",
+                            "destinationPortRange": "22",
+                            "sourceAddressPrefix": "*",
+                            "destinationAddressPrefix": "*",
+                            "access": "Allow",
+                            "priority": 100,
+                            "direction": "Inbound"
+                        }
+                    }
+                ]
+            }
+        },
+        {
+            "name": "Linux-VirtualNetwork",
+            "type": "Microsoft.Network/virtualNetworks",
+            "apiVersion": "2023-04-01",
+            "location": "[resourceGroup().location]",
+            "dependsOn": [
+                "[resourceId('Microsoft.Network/networkSecurityGroups', 'Linux-nsg')]"
+            ],
+            "tags": {
+                "displayName": "Linux-VirtualNetwork"
+            },
+            "properties": {
+                "addressSpace": {
+                    "addressPrefixes": [
+                        "10.1.0.0/16"
+                    ]
+                },
+                "subnets": [
+                    {
+                        "name": "Linux-VirtualNetwork-Subnet",
+                        "properties": {
+                            "addressPrefix": "10.1.0.0/24",
+                            "networkSecurityGroup": {
+                                "id": "[resourceId('Microsoft.Network/networkSecurityGroups', 'Linux-nsg')]"
+                            }
+                        }
+                    }
+                ]
+            }
+        },
+        {
+            "name": "Linux-NetworkInterface",
+            "type": "Microsoft.Network/networkInterfaces",
+            "apiVersion": "2023-04-01",
+            "location": "[resourceGroup().location]",
+            "dependsOn": [
+                "[resourceId('Microsoft.Network/publicIPAddresses', 'Linux-PublicIP')]",
+                "[resourceId('Microsoft.Network/virtualNetworks', 'Linux-VirtualNetwork')]"
+            ],
+            "tags": {
+                "displayName": "Linux-NetworkInterface"
+            },
+            "properties": {
+                "ipConfigurations": [
+                    {
+                        "name": "ipConfig1",
+                        "properties": {
+                            "privateIPAllocationMethod": "Dynamic",
+                            "publicIPAddress": {
+                                "id": "[resourceId('Microsoft.Network/publicIPAddresses', 'Linux-PublicIP')]"
+                            },
+                            "subnet": {
+                                "id": "[resourceId('Microsoft.Network/virtualNetworks/subnets', 'Linux-VirtualNetwork', 'Linux-VirtualNetwork-Subnet')]"
+                            }
+                        }
+                    }
+                ]
+            }
+        },
+        {
+            "name": "Linux",
+            "type": "Microsoft.Compute/virtualMachines",
+            "apiVersion": "2023-03-01",
+            "location": "[resourceGroup().location]",
+            "dependsOn": [
+                "[resourceId('Microsoft.Network/networkInterfaces', 'Linux-NetworkInterface')]"
+            ],
+            "tags": {
+                "displayName": "Linux"
+            },
+            "properties": {
+                "hardwareProfile": {
+                    "vmSize": "Standard_B1s"
+                },
+                "osProfile": {
+                    "computerName": "Linux",
+                    "adminUsername": "azureuser",
+                    "adminPassword": "Jaswanth@007"
+                },
+                "storageProfile": {
+                    "imageReference": {
+                        "publisher": "Canonical",
+                        "offer": "0001-com-ubuntu-server-jammy",
+                        "sku": "22_04-lts",
+                        "version": "latest"
+                    },
+                    "osDisk": {
+                        "name": "Linux-OSDisk",
+                        "caching": "ReadWrite",
+                        "createOption": "FromImage"
+                    }
+                },
+                "networkProfile": {
+                    "networkInterfaces": [
+                        {
+                            "id": "[resourceId('Microsoft.Network/networkInterfaces', 'Linux-NetworkInterface')]"
+                        }
+                    ]
+                },
+                "diagnosticsProfile": {
+                    "bootDiagnostics": {
+                        "enabled": true,
+                        "storageUri": "[reference(resourceId('Microsoft.Storage/storageAccounts/', toLower('Linuxstorage999'))).primaryEndpoints.blob]"
+                    }
+                }
+            }
+        }
+    ],
+    "outputs": {
+        "publicIpAddress": {
+            "type": "string",
+            "value": "[reference(resourceId('Microsoft.Network/publicIPAddresses', 'Linux-PublicIP')).ipAddress]"
+        }
+    }
+}
+
